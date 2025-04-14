@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+echo "File Janitor - Created in 2025"
+echo "Powered by Bash"
+# write your script here
