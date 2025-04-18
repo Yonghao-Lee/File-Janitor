@@ -2,3 +2,6 @@
 echo "File Janitor - Created in 2025"
 echo "Powered by Bash"
 # write your script here
+if [ "$1" = "help" ]; then
+    cat file-janitor-help.txt
+fi
