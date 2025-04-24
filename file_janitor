@@ -2,6 +2,51 @@
 echo "File Janitor - Created in 2025"
 echo "Powered by Bash"
 # write your script here
-if [ "$1" = "help" ]; then
-    cat file-janitor-help.txt
+
+SCRIPT_NAME=$(basename "$0")
+
+list_files() {
+    local directory="$1"
+
+    # if no dir is specified, use current mkdir
+    if [ -z "$directory" ]; then
+        echo "Listing files in the current directory"
+        directory="."
+    else 
+        if [ ! -e  "$directory" ]; then
+            echo  "$directory is not found"
+            return 1
+        fi
+
+        if [ ! -d "$directory" ]; then
+            echo  "$directory is not a directory"
+            return 1
+        fi
+
+        echo "Listing files in $directory"
+    fi
+    ls -a "$directory" | grep -v '^\.\.$' | grep -v '^\.$' | sort
+
+}
+
+if [ $# -eq 0 ]; then
+    echo "Type $SCRIPT_NAME help to see available options"
+    exit 1
 fi
+
+case "$1" in
+    help)
+        cat file-janitor-help.txt
+        ;;
+    list)
+        list_files "$2"
+        ;;
+    *)
+        # Invalid option
+        echo "Type $SCRIPT_NAME help to see available options"
+        exit 1
+        ;;
+esac
+
+exit 0
+
