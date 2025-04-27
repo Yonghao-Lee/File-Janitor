@@ -28,6 +28,56 @@ list_files() {
     ls -a "$directory" | grep -v '^\.\.$' | grep -v '^\.$' | sort
 
 }
+report() {
+    local directory="$1"
+    # if it is not specified, use current dir
+    if [ -z "$directory" ]; then 
+        echo "The current directory contains:"
+        directory="."
+    else 
+        if [ ! -e "$directory" ]; then
+            echo "$directory is not found"
+            return 1
+        fi 
+        if [ ! -d  "$directory" ]; then
+            echo "$directory is not a directory"
+            return 1
+        fi
+        echo "$directory contains:"
+    fi
+    
+    # Use process substitution instead of a pipe to avoid the subshell issue
+    # This way the loop executes in the current shell
+    count_tmp=0
+    size_tmp=0
+    count_log=0
+    size_log=0
+    count_py=0
+    size_py=0
+    
+    while IFS= read -r file; do
+        size=$(stat -c %s "$file" || echo 0)
+        case "$file" in 
+            *.tmp)
+                count_tmp=$((count_tmp + 1))
+                size_tmp=$((size_tmp + size))
+                ;;
+            *.log) 
+                count_log=$((count_log + 1))
+                size_log=$((size_log + size))
+                ;;
+            *.py)
+                count_py=$((count_py + 1))
+                size_py=$((size_py + size))
+                ;;
+        esac
+    done < <(find "$directory" -maxdepth 1 -type f \( -name '*.tmp' -o -name '*.log' -o -name '*.py' \))
+    
+    printf "%d tmp file(s), with total size of %d bytes\n" "$count_tmp" "$size_tmp"
+    printf "%d log file(s), with total size of %d bytes\n" "$count_log" "$size_log"
+    printf "%d py file(s), with total size of %d bytes\n" "$count_py" "$size_py"
+    return 0
+}
 
 if [ $# -eq 0 ]; then
     echo "Type $SCRIPT_NAME help to see available options"
@@ -40,6 +90,9 @@ case "$1" in
         ;;
     list)
         list_files "$2"
+        ;;
+    report)
+        report "$2"
         ;;
     *)
         # Invalid option
