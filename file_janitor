@@ -1,82 +1,109 @@
 #!/usr/bin/env bash
 echo "File Janitor - Created in 2025"
 echo "Powered by Bash"
-# write your script here
 
 SCRIPT_NAME=$(basename "$0")
 
 list_files() {
     local directory="$1"
 
-    # if no dir is specified, use current mkdir
     if [ -z "$directory" ]; then
         echo "Listing files in the current directory"
-        directory="."
-    else 
-        if [ ! -e  "$directory" ]; then
-            echo  "$directory is not found"
-            return 1
-        fi
-
-        if [ ! -d "$directory" ]; then
-            echo  "$directory is not a directory"
-            return 1
-        fi
-
-        echo "Listing files in $directory"
-    fi
-    ls -a "$directory" | grep -v '^\.\.$' | grep -v '^\.$' | sort
-
-}
-report() {
-    local directory="$1"
-    # if it is not specified, use current dir
-    if [ -z "$directory" ]; then 
-        echo "The current directory contains:"
         directory="."
     else 
         if [ ! -e "$directory" ]; then
             echo "$directory is not found"
             return 1
-        fi 
-        if [ ! -d  "$directory" ]; then
+        fi
+        if [ ! -d "$directory" ]; then
             echo "$directory is not a directory"
             return 1
         fi
-        echo "$directory contains:"
+        echo "Listing files in $directory"
     fi
-    
-    # Use process substitution instead of a pipe to avoid the subshell issue
-    # This way the loop executes in the current shell
-    count_tmp=0
-    size_tmp=0
-    count_log=0
-    size_log=0
-    count_py=0
-    size_py=0
-    
-    while IFS= read -r file; do
-        size=$(stat -c %s "$file" || echo 0)
-        case "$file" in 
-            *.tmp)
-                count_tmp=$((count_tmp + 1))
-                size_tmp=$((size_tmp + size))
-                ;;
-            *.log) 
-                count_log=$((count_log + 1))
-                size_log=$((size_log + size))
-                ;;
-            *.py)
-                count_py=$((count_py + 1))
-                size_py=$((size_py + size))
-                ;;
-        esac
-    done < <(find "$directory" -maxdepth 1 -type f \( -name '*.tmp' -o -name '*.log' -o -name '*.py' \))
-    
-    printf "%d tmp file(s), with total size of %d bytes\n" "$count_tmp" "$size_tmp"
-    printf "%d log file(s), with total size of %d bytes\n" "$count_log" "$size_log"
-    printf "%d py file(s), with total size of %d bytes\n" "$count_py" "$size_py"
-    return 0
+
+    ls -a "$directory" \
+      | grep -Ev '^\.$|^\.\.$' \
+      | sort
+}
+
+report() {
+    local dir="$1"
+    if [ -z "$dir" ]; then
+        echo "The current directory contains:"
+        dir="."
+    else
+        if [ ! -e "$dir" ]; then
+            echo "$dir is not found"
+            return 1
+        fi
+        if [ ! -d "$dir" ]; then
+            echo "$dir is not a directory"
+            return 1
+        fi
+        echo "$dir contains:"
+    fi
+
+    _do() {
+        local glob=$1 label=$2
+        local n s
+        n=$(find "$dir" -maxdepth 1 -type f -name "$glob" | wc -l)
+        s=$(find "$dir" -maxdepth 1 -type f -name "$glob" -printf "%s\n" \
+            | awk '{sum+=$1} END {print sum+0}')
+        printf "%d %s file(s), with total size of %d bytes\n" \
+               "$n" "$label" "$s"
+    }
+
+    _do '*.tmp' tmp
+    _do '*.log' log
+    _do '*.py'  py
+}
+
+clean() {
+    local dir="$1" display_path
+    if [ -z "$dir" ]; then
+        echo "Cleaning the current directory..."
+        dir="."
+        display_path="the current directory"
+    else
+        if [ ! -e "$dir" ]; then
+            echo "$dir is not found"
+            return 1
+        fi
+        if [ ! -d "$dir" ]; then
+            echo "$dir is not a directory"
+            return 1
+        fi
+        display_path="$dir"
+        echo "Cleaning $display_path..."
+    fi
+
+    # 1) delete *.log older than 3 days
+    echo -n "Deleting old log files..."
+    mapfile -t old_logs < <(find "$dir" -maxdepth 1 -type f -name '*.log' -mtime +3)
+    local n_old=${#old_logs[@]}
+    (( n_old > 0 )) && rm -f "${old_logs[@]}"
+    echo "  done! $n_old files have been deleted"
+
+    # 2) delete all *.tmp
+    echo -n "Deleting temporary files..."
+    mapfile -t tmp_files < <(find "$dir" -maxdepth 1 -type f -name '*.tmp')
+    local n_tmp=${#tmp_files[@]}
+    (( n_tmp > 0 )) && rm -f "${tmp_files[@]}"
+    echo "  done! $n_tmp files have been deleted"
+
+    # 3) move *.py into python_scripts/
+    echo -n "Moving python files..."
+    mapfile -t py_files < <(find "$dir" -maxdepth 1 -type f -name '*.py')
+    local n_py=${#py_files[@]}
+    if (( n_py > 0 )); then
+        mkdir -p "$dir/python_scripts"
+        mv "${py_files[@]}" "$dir/python_scripts/"
+    fi
+    echo "  done! $n_py files have been moved"
+
+    echo
+    echo "Clean up of $display_path is complete!"
 }
 
 if [ $# -eq 0 ]; then
@@ -94,12 +121,13 @@ case "$1" in
     report)
         report "$2"
         ;;
+    clean)
+        clean "$2"
+        ;;
     *)
-        # Invalid option
         echo "Type $SCRIPT_NAME help to see available options"
         exit 1
         ;;
 esac
 
 exit 0
-
